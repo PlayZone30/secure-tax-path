@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Upload,
@@ -21,7 +23,9 @@ import {
   Calendar,
   Eye,
   Lock,
-  AlertCircle
+  AlertCircle,
+  X,
+  FileImage
 } from "lucide-react";
 
 // Mock user data for demonstration
@@ -49,11 +53,43 @@ const mockInvoices = [
   { id: 2, service: "Document Processing Fee", amount: "$25.00", date: "2025-01-15", status: "Paid" },
 ];
 
+// Document categories as specified in PRD
+const documentCategories = [
+  "W-2 Forms",
+  "1099 Forms", 
+  "Bank Statements",
+  "Receipts & Deductions",
+  "Other Documents"
+];
+
+// File validation constants
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+
+// Document status types
+type DocumentStatus = "Uploading" | "Upload Successful" | "Processing..." | "Ready for Review" | "Error";
+
+interface UploadedFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  category: string;
+  status: DocumentStatus;
+  progress: number;
+  uploadDate: string;
+}
+
 export default function Portal() {
   const { toast } = useToast();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginData, setLoginData] = useState({ email: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Document upload state
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,11 +107,158 @@ export default function Portal() {
     });
   };
 
-  const handleFileUpload = () => {
-    toast({
-      title: "File Upload",
-      description: "File upload functionality would be implemented here with secure encryption.",
+  // File validation function
+  const validateFile = (file: File): string | null => {
+    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+      return "Only PDF, JPG, and PNG files are allowed";
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      return "File size must be less than 5MB";
+    }
+    return null;
+  };
+
+  // File upload handler
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    
+    if (!selectedCategory) {
+      toast({
+        title: "Category Required",
+        description: "Please select a document category before uploading.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    Array.from(files).forEach(async (file) => {
+      const validationError = validateFile(file);
+      if (validationError) {
+        toast({
+          title: "Upload Failed",
+          description: validationError,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const fileId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      const newFile: UploadedFile = {
+        id: fileId,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        category: selectedCategory,
+        status: "Uploading",
+        progress: 0,
+        uploadDate: new Date().toISOString().split('T')[0],
+      };
+
+      setUploadedFiles(prev => [...prev, newFile]);
+
+      // Simulate upload progress
+      for (let progress = 0; progress <= 100; progress += 10) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        setUploadedFiles(prev => 
+          prev.map(f => f.id === fileId ? { ...f, progress } : f)
+        );
+      }
+
+      // Simulate upload completion
+      setUploadedFiles(prev => 
+        prev.map(f => 
+          f.id === fileId 
+            ? { ...f, status: "Upload Successful", progress: 100 }
+            : f
+        )
+      );
+
+      // After 2 seconds, change to "Processing..." status
+      setTimeout(() => {
+        setUploadedFiles(prev => 
+          prev.map(f => 
+            f.id === fileId 
+              ? { ...f, status: "Processing..." }
+              : f
+          )
+        );
+      }, 2000);
+
+      // After 5 seconds, change to "Ready for Review" status
+      setTimeout(() => {
+        setUploadedFiles(prev => 
+          prev.map(f => 
+            f.id === fileId 
+              ? { ...f, status: "Ready for Review" }
+              : f
+          )
+        );
+      }, 5000);
+
+      toast({
+        title: "Upload Successful",
+        description: `${file.name} has been uploaded successfully.`,
+      });
     });
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    handleFileUpload(e.dataTransfer.files);
+  };
+
+  // File input change handler
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFileUpload(e.target.files);
+  };
+
+  // Remove uploaded file
+  const removeFile = (fileId: string) => {
+    setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
+  };
+
+  // Get file icon based on type
+  const getFileIcon = (type: string) => {
+    if (type === 'application/pdf') return <FileText className="h-5 w-5 text-red-500" />;
+    if (type.startsWith('image/')) return <FileImage className="h-5 w-5 text-blue-500" />;
+    return <FileText className="h-5 w-5 text-muted-foreground" />;
+  };
+
+  // Format file size
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Get status badge variant
+  const getStatusBadgeVariant = (status: DocumentStatus) => {
+    switch (status) {
+      case "Upload Successful":
+        return "default";
+      case "Processing...":
+        return "secondary";
+      case "Ready for Review":
+        return "default";
+      case "Error":
+        return "destructive";
+      default:
+        return "outline";
+    }
   };
 
   const handleDownload = (fileName: string) => {
@@ -328,9 +511,11 @@ export default function Portal() {
                     <Upload className="h-6 w-6 mb-2" />
                     Upload Documents
                   </Button>
-                  <Button variant="outline" className="h-20 flex-col">
-                    <Calendar className="h-6 w-6 mb-2" />
-                    Schedule Meeting
+                  <Button variant="outline" className="h-20 flex-col" asChild>
+                    <Link to="/appointment">
+                      <Calendar className="h-6 w-6 mb-2" />
+                      Schedule Meeting
+                    </Link>
                   </Button>
                   <Button variant="outline" className="h-20 flex-col">
                     <MessageCircle className="h-6 w-6 mb-2" />
@@ -351,13 +536,100 @@ export default function Portal() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <Button onClick={handleFileUpload}>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Upload New Document
-                  </Button>
-                  
+                <div className="space-y-6">
+                  {/* Document Category Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="document-category">Document Category</Label>
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select document category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {documentCategories.map((category) => (
+                          <SelectItem key={category} value={category}>
+                            {category}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* File Upload Area */}
+                  <div
+                    className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                      isDragOver 
+                        ? "border-primary bg-primary/5" 
+                        : "border-muted-foreground/25 hover:border-primary/50"
+                    }`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                  >
+                    <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">Upload Documents</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Drag and drop files here, or click to select files
+                    </p>
+                    <div className="space-y-2 text-sm text-muted-foreground">
+                      <p>Supported formats: PDF, JPG, PNG</p>
+                      <p>Maximum file size: 5MB per file</p>
+                    </div>
+                    <Input
+                      type="file"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={handleFileInputChange}
+                      className="hidden"
+                      id="file-upload"
+                    />
+                    <Button 
+                      onClick={() => document.getElementById('file-upload')?.click()}
+                      className="mt-4"
+                      disabled={!selectedCategory}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      Choose Files
+                    </Button>
+                  </div>
+
+                  {/* Uploaded Files List */}
+                  {uploadedFiles.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="font-medium">Recently Uploaded Files</h4>
+                      {uploadedFiles.map((file) => (
+                        <div key={file.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            {getFileIcon(file.type)}
+                            <div>
+                              <p className="font-medium text-sm">{file.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {file.category} • {formatFileSize(file.size)} • {file.uploadDate}
+                              </p>
+                              {file.status === "Uploading" && (
+                                <Progress value={file.progress} className="w-32 h-1 mt-1" />
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant={getStatusBadgeVariant(file.status)}>
+                              {file.status}
+                            </Badge>
+                            <Button 
+                              size="sm" 
+                              variant="ghost"
+                              onClick={() => removeFile(file.id)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Existing Documents */}
                   <div className="space-y-3">
+                    <h4 className="font-medium">Previous Documents</h4>
                     {mockDocuments.map((doc) => (
                       <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center space-x-3">

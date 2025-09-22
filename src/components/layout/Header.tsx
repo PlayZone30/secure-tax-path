@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, Calculator, Shield, Phone } from "lucide-react";
+import { Menu, Calculator, Shield, Phone, Calendar, DollarSign, BookOpen } from "lucide-react";
 
 const navigation = [
   { name: "Home", href: "/", icon: null },
   { name: "Services", href: "/services", icon: Calculator },
+  { name: "Pricing", href: "/pricing", icon: DollarSign },
   { name: "About", href: "/about", icon: null },
+  { name: "Blog", href: "/blog", icon: BookOpen },
   { name: "Resources", href: "/resources", icon: null },
   { name: "Contact", href: "/contact", icon: Phone },
 ];
@@ -53,6 +55,12 @@ export function Header() {
             <Button variant="outline" asChild>
               <Link to="/portal">Client Portal</Link>
             </Button>
+            <Button variant="default" asChild>
+              <Link to="/appointment">
+                <Calendar className="h-4 w-4 mr-2" />
+                Book Appointment
+              </Link>
+            </Button>
             <Button variant="primary" asChild>
               <Link to="/contact">Get Started</Link>
             </Button>
@@ -86,6 +94,12 @@ export function Header() {
                   <Button variant="outline" asChild>
                     <Link to="/portal" onClick={() => setIsOpen(false)}>
                       Client Portal
+                    </Link>
+                  </Button>
+                  <Button variant="default" asChild>
+                    <Link to="/appointment" onClick={() => setIsOpen(false)}>
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Book Appointment
                     </Link>
                   </Button>
                   <Button variant="primary" asChild>
